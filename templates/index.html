@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AccidentDetect — Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="scanline" aria-hidden="true"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    ACCIDENTDETECT / SYS v2.1
+  </div>
+  <div class="status-bar">
+    <span id="clock" class="status-ok">--:--:--</span>
+    <span>·</span>
+    <span class="status-ok">SYSTEM ONLINE</span>
+    <span>·</span>
+    <span id="detect-status" class="status-ok">AWAITING INPUT</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left">
+
+    <div class="section-label">Video upload</div>
+
+    <div class="upload-zone" id="dropZone">
+      <div class="corner-tl"></div><div class="corner-tr"></div>
+      <div class="corner-bl"></div><div class="corner-br"></div>
+      <div class="upload-icon"><i class="ti ti-upload"></i></div>
+      <div class="upload-title">Drop footage here</div>
+      <div class="upload-sub">MP4 · AVI · MOV · MKV accepted</div>
+      <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">
+        <i class="ti ti-player-play" style="font-size:14px"></i>
+        Analyze video
+      </button>
+      <input type="file" id="fileInput" accept="video/*" style="display:none">
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressLabel">PROCESSING...</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <div class="alert-banner" id="alertBanner">
+      <div class="alert-title" id="alertTitle">⚠ ACCIDENT DETECTED — EMAIL ALERT SENT</div>
+      <div class="alert-body" id="alertBody">Incident clip extracted and saved.</div>
+    </div>
+
+    <div class="section-label">Processed footage</div>
+
+    <div class="video-grid" id="videoGrid">
+      {% if videos %}
+        {% for video in videos %}
+        <div class="video-card">
+          <div class="video-thumb">
+            <video src="/outputs/{{ video }}" muted preload="metadata"
+              onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>
+            <div class="acc-badge">ACCIDENT</div>
+            <div class="corner-tl"></div><div class="corner-tr"></div>
+            <div class="corner-bl"></div><div class="corner-br"></div>
+          </div>
+          <div class="video-info">
+            <div class="video-name">{{ video }}</div>
+          </div>
+          <div class="video-footer">
+            <span class="clip-label">INCIDENT CLIP</span>
+            <a class="download-btn" href="/outputs/{{ video }}" download="{{ video }}">
+              <i class="ti ti-download" style="font-size:12px"></i> Download
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" id="emptyState">
+          <i class="ti ti-video-off"></i>
+          No processed videos yet — upload footage to begin
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right">
+
+    <div class="sidebar-section">
+      <div class="section-label">Detection stats</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Processed</div>
+          <div class="stat-value stat-gray" id="statProcessed">{{ videos|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Incidents</div>
+          <div class="stat-value stat-red" id="statIncidents">{{ videos|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Alerts sent</div>
+          <div class="stat-value stat-amber" id="statAlerts">{{ videos|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Uptime</div>
+          <div class="stat-value stat-teal" id="statUptime">0m</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Alert target</div>
+      <div class="email-indicator">
+        <div class="email-dot"></div>
+        techglacier60@gmail.com
+      </div>
+      <div class="smtp-info">
+        SMTP: smtp.gmail.com:587<br>
+        Protocol: STARTTLS<br>
+        Trigger: motion spike detection
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Activity log</div>
+      <ul class="log-list" id="logList">
+        <li class="log-item">
+          <span class="log-time">now</span>
+          <div class="log-dot log-dot-teal"></div>
+          <span class="log-msg">System initialized. Awaiting video input.</span>
+        </li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // --- Clock ---
+  function clock() {
+    const n = new Date();
+    document.getElementById('clock').textContent =
+      [n.getHours(), n.getMinutes(), n.getSeconds()]
+        .map(x => String(x).padStart(2,'0')).join(':');
+  }
+  setInterval(clock, 1000); clock();
+
+  const startTime = Date.now();
+  setInterval(() => {
+    document.getElementById('statUptime').textContent =
+      Math.floor((Date.now() - startTime) / 60000) + 'm';
+  }, 10000);
+
+  // --- Log ---
+  function addLog(msg, type) {
+    const li = document.createElement('li');
+    li.className = 'log-item';
+    const t = new Date();
+    const ts = [t.getHours(), t.getMinutes()].map(x => String(x).padStart(2,'0')).join(':');
+    li.innerHTML = `<span class="log-time">${ts}</span>
+      <div class="log-dot log-dot-${type}"></div>
+      <span class="log-msg">${msg}</span>`;
+    document.getElementById('logList').prepend(li);
+    const logs = document.getElementById('logList');
+    while (logs.children.length > 10) logs.removeChild(logs.lastChild);
+  }
+
+  // --- Drag & drop ---
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag');
+    if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+  });
+
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if (e.target.files.length) uploadFile(e.target.files[0]);
+  });
+
+  // --- Upload & poll ---
+  async function uploadFile(file) {
+    if (!file.type.startsWith('video/') && !file.name.match(/\.(mp4|avi|mov|mkv)$/i)) {
+      addLog('Invalid file type rejected.', 'red'); return;
+    }
+
+    const btn = document.getElementById('uploadBtn');
+    const pw = document.getElementById('progressWrap');
+    const pf = document.getElementById('progressFill');
+    const pp = document.getElementById('progressPct');
+    const pl = document.getElementById('progressLabel');
+    const ab = document.getElementById('alertBanner');
+    const ds = document.getElementById('detect-status');
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Uploading...';
+    pw.style.display = 'block';
+    ab.classList.remove('show');
+    ds.textContent = 'UPLOADING';
+    ds.style.color = 'var(--amber)';
+
+    addLog(`Uploading: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`, 'teal');
+
+    const formData = new FormData();
+    formData.append('video', file);
+
+    let jobId;
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.error) { addLog('Upload error: ' + data.error, 'red'); reset(btn); return; }
+      jobId = data.job_id;
+    } catch(e) {
+      addLog('Upload failed: ' + e.message, 'red'); reset(btn); return;
+    }
+
+    addLog('Video uploaded — starting analysis...', 'teal');
+    btn.innerHTML = '<i class="ti ti-loader"></i> Processing...';
+    ds.textContent = 'ANALYZING';
+
+    // Poll progress
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/progress/${encodeURIComponent(jobId)}`);
+        const state = await res.json();
+
+        pf.style.width = state.pct + '%';
+        pp.textContent = state.pct + '%';
+        pl.textContent = (state.stage || '').toUpperCase();
+
+        if (state.done) {
+          clearInterval(poll);
+
+          if (state.error) {
+            addLog('Processing error: ' + state.error, 'red');
+            ds.textContent = 'ERROR';
+            ds.style.color = 'var(--red)';
+            reset(btn);
+            return;
+          }
+
+          // Show result
+          const accidentDetected = state.accident;
+          const outputFile = state.output;
+
+          if (accidentDetected) {
+            document.getElementById('alertTitle').textContent = '⚠ ACCIDENT DETECTED — EMAIL ALERT SENT';
+            document.getElementById('alertBody').textContent = `Clip: ${outputFile} — Email dispatched.`;
+            addLog('Accident detected!', 'red');
+            addLog('Email alert sent to techglacier60@gmail.com', 'amber');
+            ds.textContent = '⚠ INCIDENT DETECTED';
+            ds.style.color = 'var(--red)';
+          } else {
+            document.getElementById('alertTitle').textContent = '✓ VIDEO PROCESSED — NO ACCIDENT FOUND';
+            document.getElementById('alertTitle').style.color = 'var(--teal)';
+            document.getElementById('alertBody').textContent = `Clip: ${outputFile} — No incident detected.`;
+            ds.textContent = 'NO INCIDENT';
+            ds.style.color = 'var(--teal)';
+          }
+
+          ab.classList.add('show');
+          addLog(`Clip saved: ${outputFile}`, 'teal');
+
+          // Update stats
+          const sp = document.getElementById('statProcessed');
+          const si = document.getElementById('statIncidents');
+          const sa = document.getElementById('statAlerts');
+          sp.textContent = parseInt(sp.textContent) + 1;
+          if (accidentDetected) {
+            si.textContent = parseInt(si.textContent) + 1;
+            sa.textContent = parseInt(sa.textContent) + 1;
+          }
+
+          // Add video card
+          const emptyState = document.getElementById('emptyState');
+          if (emptyState) emptyState.remove();
+
+          const card = document.createElement('div');
+          card.className = 'video-card';
+          card.style.animation = 'fadeIn 0.4s ease';
+          card.innerHTML = `
+            <div class="video-thumb">
+              <video src="/outputs/${outputFile}" muted preload="metadata"
+                onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>
+              ${accidentDetected ? '<div class="acc-badge">ACCIDENT</div>' : '<div class="acc-badge" style="background:var(--teal)">CLEAR</div>'}
+              <div class="corner-tl"></div><div class="corner-tr"></div>
+              <div class="corner-bl"></div><div class="corner-br"></div>
+            </div>
+            <div class="video-info">
+              <div class="video-name">${outputFile}</div>
+            </div>
+            <div class="video-footer">
+              <span class="clip-label">${accidentDetected ? 'INCIDENT CLIP' : 'CLEAR CLIP'}</span>
+              <a class="download-btn" href="/outputs/${outputFile}" download="${outputFile}">
+                <i class="ti ti-download" style="font-size:12px"></i> Download
+              </a>
+            </div>`;
+
+          document.getElementById('videoGrid').prepend(card);
+
+          reset(btn);
+
+          setTimeout(() => {
+            ds.textContent = 'READY';
+            ds.style.color = 'var(--teal)';
+          }, 8000);
+        }
+      } catch(e) {
+        console.error('Poll error:', e);
+      }
+    }, 800);
+  }
+
+  function reset(btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-player-play" style="font-size:14px"></i> Analyze video';
+    document.getElementById('fileInput').value = '';
+  }
+</script>
+</body>
+</html>
